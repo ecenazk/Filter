@@ -1,0 +1,351 @@
+---
+title: "Sequence Filtering for alignments, removing female and unfertilized from mixed, for Bowtie Aligned Data"
+output: html_document
+detail: keep all AS in Local but filter low AS out in Contigs since otherwise way too big to process! 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## Local
+
+```{r Get Data}
+f06 <-read.table(file = "Filter/Input_Alignments/female_MI_0_6_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+f15 <-read.table(file = "Filter/Input_Alignments/female_MI_1_5_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+f18 <-read.table(file = "Filter/Input_Alignments/female_MI_1_8_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+m06 <-read.table(file = "Filter/Input_Alignments/mixed_MI_0_6_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+m15 <-read.table(file = "Filter/Input_Alignments/mixed_MI_1_5_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+m18 <-read.table(file = "Filter/Input_Alignments/mixed_MI_1_8_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+u06 <-read.table(file = "Filter/Input_Alignments/unfert_MI_0_6_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+u15 <-read.table(file = "Filter/Input_Alignments/unfert_MI_1_5_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+u18 <-read.table(file = "Filter/Input_Alignments/unfert_MI_1_8_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.sam", header = FALSE, fill = TRUE, skip = 16)
+```
+
+```{r Change NA values to 0}
+f06[is.na(f06)] = 0
+f15[is.na(f15)] = 0
+f18[is.na(f18)] = 0
+m06[is.na(m06)] = 0
+m15[is.na(m15)] = 0
+m18[is.na(m18)] = 0
+u06[is.na(u06)] = 0
+u15[is.na(u15)] = 0
+u18[is.na(u18)] = 0
+```
+
+```{r Find and Write End Point}
+f06$end <- f06$V4 + nchar(f06[,10]) -1
+f15$end <- f15$V4 + nchar(f15[,10]) -1
+f18$end <- f18$V4 + nchar(f18[,10]) -1
+m06$end <- m06$V4 + nchar(m06[,10]) -1
+m15$end <- m15$V4 + nchar(m15[,10]) -1
+m18$end <- m18$V4 + nchar(m18[,10]) -1
+u06$end <- u06$V4 + nchar(u06[,10]) -1
+u15$end <- u15$V4 + nchar(u15[,10]) -1
+u18$end <- u18$V4 + nchar(u18[,10]) -1
+```
+
+```{r get the references}
+refs <- c("genomic_BuGZ_MI_MIII_-_BuGZ_only","genomic_BuGZ_MIII_-_BuGZ_only", 
+          "genomic_BuGZ_MI_SAM_-_BuGZ_only", "genomic_BuGZ_MV_-_BuGZ_only",
+          "genomic_BuGZ_WT_-_BuGZ_only", "SAM-I")
+```
+
+```{r open emptry vectors for storage}
+Header06 <- c()
+Header15 <- c()
+Header18 <- c()
+Headertot <- c()
+
+Sequence06 <- c()
+Sequence15 <- c()
+Sequence18 <- c()
+Sequencetot <- c()
+```
+
+```{r the filtering}
+library(tidyverse)
+
+#subset according to reference
+for (ref in refs){
+  reff06 <- f06[which(f06$V3 == ref),]
+  reff15 <- f15[which(f15$V3 == ref),]
+  reff18 <- f18[which(f18$V3 == ref),]
+  refu06 <- u06[which(u06$V3 == ref),]
+  refu15 <- u15[which(u15$V3 == ref),]
+  refu18 <- u18[which(u18$V3 == ref),] 
+  refm06 <- m06[which(m06$V3 == ref),]
+  refm15 <- m15[which(m15$V3 == ref),]
+  refm18 <- m18[which(m18$V3 == ref),]
+ 
+##############################################################################################################
+  
+  #get the positions that are expressed in female and unfert at all time points for that reference
+  
+  #for each time point
+  vector06 <- c()                                               
+  for (i in 1:dim(reff06)[1]) {
+    vector06 <- append(vector06,(reff06[i,"V4"]:reff06[i,"end"]))
+    vector06 <- unique(vector06)}
+  for (i in 1:dim(refu06)[1]) {
+    vector06 <- append(vector06,(refu06[i,"V4"]:refu06[i,"end"]))
+    vector06 <- unique(vector06)}
+  
+    vector15 <- c()                                               
+  for (i in 1:dim(reff15)[1]) {
+    vector15 <- append(vector15,(reff15[i,"V4"]:reff15[i,"end"]))
+    vector15 <- unique(vector15)}
+  for (i in 1:dim(refu15)[1]) {
+    vector15 <- append(vector15,(refu15[i,"V4"]:refu15[i,"end"]))
+    vector15 <- unique(vector15)}
+    
+    vector18 <- c()                                               
+  for (i in 1:dim(reff18)[1]) {
+    vector18 <- append(vector18,(reff18[i,"V4"]:reff18[i,"end"]))
+    vector18 <- unique(vector18)}
+  for (i in 1:dim(refu18)[1]) {
+    vector18 <- append(vector18,(refu18[i,"V4"]:refu18[i,"end"]))
+    vector18 <- unique(vector18)}
+    
+  #for merged time point
+    vectortot <- c(vector06,vector15,vector18)
+    vectortot <- unique(vectortot)
+
+##############################################################################################################
+      
+  #filter according to position
+    
+  #for each time point
+  filtered06 <- refm06[!(refm06$V4 %in% vector06 & refm06$end %in% vector06),]
+  filtered15 <- refm15[!(refm15$V4 %in% vector15 & refm15$end %in% vector15),]
+  filtered18 <- refm18[!(refm18$V4 %in% vector18 & refm18$end %in% vector18),]
+  
+  #for merged time point
+  refmtot <- rbind(refm06[c(1,2,3,4,5,6,10,11,22)],refm15[c(1,2,3,4,5,6,10,11,22)],refm18[c(1,2,3,4,5,6,10,11,21)])
+  filteredtot <- refmtot[!(refmtot$V4 %in% vectortot & refmtot$end %in% vectortot),]
+  
+  #so know you have those sequences that align:
+  #   -completely male specific, 
+  #   -starts common but ends male specific
+  #   -starts male specific but ends common
+  
+##############################################################################################################
+
+  #get the filtered reads names and sequences
+  
+  #for each time point
+  Header06 <- append(Header06, filtered06$V1)
+  Header15 <- append(Header15, filtered15$V1)
+  Header18 <- append(Header18, filtered18$V1)
+  
+  Sequence06 <- append(Sequence06, filtered06$V10)
+  Sequence15 <- append(Sequence15, filtered15$V10)
+  Sequence18 <- append(Sequence18, filtered18$V10)
+  
+  #for merged time point
+  Headertot <- append(Headertot, filteredtot$V1)
+  Sequencetot <- append(Sequencetot, filteredtot$V10)
+}
+```
+
+```{r get rif of fastq entry duplications inside and write fasta}
+
+#as you are aligning bowtie with option -a:
+#         - you have an entry for each time a read is aligned somewhere
+#         - so if a read aligns both to MISAM and MI_MIII, then you'll have two entries for the same read
+#         - so, taking all entries as input fasta would amplify the coverage to many folds
+#         - that is why we need the unique transcript reads, and not the multiple entries for each read
+
+##############################################################################################################
+
+#get the headers and sequences together, write the output file names
+Headers <- list(Header06,Header15,Header18,Headertot)
+Sequences <- list(Sequence06,Sequence15,Sequence18,Sequencetot)
+Files <- c("Filter/Filtered_Fasta/Filtered_0_6_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.fa",
+           "Filter/Filtered_Fasta/Filtered_1_5_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.fa",
+           "Filter/Filtered_Fasta/Filtered_1_8_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.fa",
+           "Filter/Filtered_Fasta/Filtered_total_BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI.fa")
+
+##############################################################################################################
+
+library(microseq)
+
+for (i in 1:length(Headers)){
+  h <- Headers[i]
+  s <- Sequences[i]
+  f <- Files[i]
+  
+  fasta <- data.frame(h,s)
+  colnames(fasta) <- c("Header","Sequence")
+  
+  fasta <- unique(fasta, by = "Header")
+  
+  writeFasta(fdta = fasta, out.file = f)
+}
+```
+
+# with this script
+you know have the filtered sequences as a FASTQ file, in where the sequences are completely male specific, start common end male specific, or start specific end common. giving these FASTQ as bowtie2/minimap2 input will give you a new alignment only for the filtered sequences!
+  - bowtie2 -p 64 -f -a --no-unal --ignore-quals -x <indexprefix> -U <input.fa> -S <output.sam>
+        -a so that it searches for all distinct, valid alignments for each read
+        -f so that it nows the given input files are fasta
+        --ignore-quals to consider the quality value as max, so that bowtie2 doesn't check quality values
+
+
+# visualization
+to see the alignments either use the visualization script, or, make a bai file of your bam alignments of BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI and go into IGV with the two along with BuGZMISAM_BuGZMIMIII_BuGZMIII_BuGZMV_BuGZWT_Mdtra_LUCI_Mdmd_SAMI fasta file as the reference genome
+
+```{r bowtie2 visualization parameters}
+library(GenomicAlignments)
+p <- ScanBamParam(tag="AS")
+```
+
+```{r bowtie2 visualization code for time points}
+par(mfrow=c(3,1))
+
+# BuGZMISAM
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_0_6/Filtered_0_6_BuGZMISAM.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,15478), ylab = "06BuGZMISAM")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_5/Filtered_1_5_BuGZMISAM.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,15478), ylab = "15BuGZMISAMI")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_8/Filtered_1_8_BuGZMISAM.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,15478), ylab = "18BuGZMISAM")
+
+
+# BuGZMIMIII
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_0_6/Filtered_0_6_BuGZMIMIII.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,13656), ylab = "06BuGZMIMIII")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_5/Filtered_1_5_BuGZMIMIII.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,13656), ylab = "15BuGZMIMIIII")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_8/Filtered_1_8_BuGZMIMIII.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,13656), ylab = "18BuGZMIMIII")
+
+
+# BuGZMIII
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_0_6/Filtered_0_6_BuGZMIII.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,14844), ylab = "06BuGZMIII")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_5/Filtered_1_5_BuGZMIII.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,14844), ylab = "15BuGZMIIII")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_8/Filtered_1_8_BuGZMIII.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,14844), ylab = "18BuGZMIII")
+
+
+# BuGZMV
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_0_6/Filtered_0_6_BuGZMV.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,20269), ylab = "06BuGZMV")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_5/Filtered_1_5_BuGZMV.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,20269), ylab = "15BuGZMVI")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_8/Filtered_1_8_BuGZMV.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,20269), ylab = "18BuGZMV")
+
+
+# BuGZWT
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_0_6/Filtered_0_6_BuGZWT.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,18368), ylab = "06BuGZWT")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_5/Filtered_1_5_BuGZWT.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,18368), ylab = "15BuGZWTI")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_8/Filtered_1_8_BuGZWT.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,18368), ylab = "18BuGZWT")
+
+
+# SAM
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_0_6/Filtered_0_6_SAM-I.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,1719), ylab = "06SAM")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_5/Filtered_1_5_SAM-I.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,1719), ylab = "15SAMI")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_1_8/Filtered_1_8_SAM-I.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,1719), ylab = "18SAM")
+
+```
+
+```{r bowtie2 visualization code for total}
+par(mfrow=c(3,1))
+
+# All references of Consensus
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_total/Filtered_total_BuGZMISAM.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,15478), ylab = "BuGZMISAM")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_total/Filtered_total_BuGZMIMIII.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,13656), ylab = "BuGZMIMIII")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_total/Filtered_total_BuGZMIII.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,14844), ylab = "BuGZMIII")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_total/Filtered_total_BuGZMV.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,20269), ylab = "BuGZMV")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_total/Filtered_total_BuGZWT.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,18368), ylab = "BuGZWT")
+
+rga <- readGAlignments("Filter/Filtered_Alignments/Filtered_total/Filtered_total_SAM-I.bam", param = p)
+x <- cbind(start(rga),end(rga))
+y <- cbind(mcols(rga)$AS,mcols(rga)$AS)
+matplot(t(x), t(y), type = "l", col = 'red', ylim = c(-60,5), xlim = c(0,1719), ylab = "SAM")
+```
+
+
+
+
+
+
